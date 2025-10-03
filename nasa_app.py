@@ -325,43 +325,13 @@ def ai_comment_on_report(report_text, corpus_texts):
 
 def search_nasa_osdr_videos(query, max_results=3):
     """
-    Search for related videos from NASA database - REAL VERSION
+    Search for related videos from NASA OSDR database
     """
-    # Check jika user nak guna real videos atau simulated
-    if 'use_real_videos' not in st.session_state:
-        st.session_state.use_real_videos = True
-    
     try:
-        if st.session_state.use_real_videos:
-            return get_real_nasa_videos(query, max_results)  # ✅ Ganti ke fungsi baru
-        else:
-            return get_simulated_osdr_videos(query, max_results)  # ✅ Fallback ke simulasi
-    except Exception as e:
-        st.sidebar.warning(f"Video search failed, using fallback: {e}")
         return get_simulated_osdr_videos(query, max_results)
-def extract_video_keywords(title):
-    """
-    Extract keywords dari title artikel untuk video search
-    """
-    title_lower = title.lower()
-    
-    keyword_mapping = {
-        'microgravity': 'microgravity space biology',
-        'radiation': 'space radiation protection', 
-        'plant': 'space plant growth NASA',
-        'cell': 'space cell biology',
-        'astronaut': 'astronaut health NASA',
-        'mars': 'Mars mission biology',
-        'iss': 'International Space Station research',
-        'biological': 'space biological systems',
-        'genetic': 'space genetics research'
-    }
-    
-    for keyword, search_query in keyword_mapping.items():
-        if keyword in title_lower:
-            return search_query
-    
-    return "NASA space bioscience"  # default query
+    except Exception as e:
+        return get_simulated_osdr_videos(query, max_results)
+
 def get_simulated_osdr_videos(query, max_results=3):
     """
     Simulated NASA OSDR video data untuk demonstration
@@ -416,57 +386,7 @@ def get_simulated_osdr_videos(query, max_results=3):
         relevant_videos = video_database["default"]
     
     return relevant_videos[:max_results]
-@st.cache_data(ttl=3600)
-def get_real_nasa_videos(query, max_results=3):
-    """
-    Cari video sebenar dari NASA Image and Video Library API - OPTIMIZED FOR STREAMLIT CLOUD
-    """
-    try:
-        url = "https://images-api.nasa.gov/search"
-        params = {
-            "q": f"{query} space bioscience",
-            "media_type": "video", 
-            "page_size": max_results
-        }
-        
-        response = requests.get(url, params=params, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        
-        videos = []
-        for item in data.get("collection", {}).get("items", []):
-            nasa_id = item["data"][0]["nasa_id"]
-            title = item["data"][0]["title"]
-            
-            # Gunakan mobile version yang lebih kecil untuk Streamlit Cloud
-            video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~mobile.mp4"
-            
-            # Check jika video accessible (penting untuk Streamlit Cloud)
-            try:
-                # Simple head request untuk verify video exists
-                head_response = requests.head(video_url, timeout=5)
-                if head_response.status_code != 200:
-                    # Fallback ke orig version
-                    video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~orig.mp4"
-            except:
-                video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~orig.mp4"
 
-            video_info = {
-                "title": title,
-                "description": item["data"][0].get("description", "NASA official video"),
-                "url": video_url,
-                "thumbnail": f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~thumb.jpg",
-                "date": item["data"][0].get("date_created", ""),
-                "source": "NASA Official",
-                "nasa_id": nasa_id
-            }
-            videos.append(video_info)
-        
-        return videos if videos else get_simulated_osdr_videos(query)
-        
-    except Exception as e:
-        st.sidebar.warning(f"⚠️ NASA video API unavailable: {e}")
-        return get_simulated_osdr_videos(query)
 # =========================
 # 🌐 Graph Functions
 # =========================
@@ -802,67 +722,41 @@ with tabs[0]:
             if "conclusion" in row and pd.notna(row["conclusion"]):
                 with st.expander("📌 **Conclusion**", expanded=False):
                     st.write(row["conclusion"])
-            # 🎬 VIDEO SECTION - OPTIMIZED FOR STREAMLIT CLOUD
+
+            # 🎬 VIDEO SECTION - UPDATED VERSION (PASTI NAMPAK)
             st.markdown("---")
             st.markdown("#### 🎬 **NASA Video Resources**")
             
-            # Dapatkan video sebenar dari NASA
-            video_query = extract_video_keywords(row['title'])
-            nasa_videos = search_nasa_osdr_videos(video_query, max_results=2)  # Kurangkan untuk performance
+            # Create columns for better layout
+            col1, col2 = st.columns(2)
             
-            if not nasa_videos:
-                st.info("🔍 No NASA videos found. Using simulated data.")
-                # Fallback ke simulated videos
-                nasa_videos = get_simulated_osdr_videos(video_query, 2)
+            title_lower = row['title'].lower()
             
-            for i, video in enumerate(nasa_videos):
-                with st.container():
-                    st.markdown(f"**{video['title']}**")
-                    
-                    col1, col2 = st.columns([1, 2])
-                    
-                    with col1:
-                        # Thumbnail
-                        try:
-                            st.image(video['thumbnail'], use_container_width=True)
-                        except:
-                            st.image("https://images-assets.nasa.gov/image/iss067e328135/iss067e328135~thumb.jpg", 
-                                    use_container_width=True)
-                    
-                    with col2:
-                        st.caption(f"📅 {video.get('date', '')[:10]}")
-                        
-                        # Description
-                        desc = video.get('description', 'NASA official video')
-                        st.write(desc[:100] + "..." if len(desc) > 100 else desc)
-                        
-                        # VIDEO PLAYER - Streamlit Cloud compatible
-                        st.write("**Video:**")
-                        
-                        # Check jika ini NASA MP4 video atau YouTube link
-                        if video['url'].endswith('.mp4') or 'nasa.gov' in video['url']:
-                            try:
-                                st.video(video['url'])
-                            except Exception as e:
-                                st.warning("Video cannot be played directly")
-                                if st.button(f"🌐 Open Video in Browser", key=f"open_{idx}_{i}"):
-                                    webbrowser.open(video['url'])
-                        else:
-                            # Untuk YouTube links, hanya provide link
-                            st.info("YouTube video - click below to watch:")
-                            if st.button(f"🎬 Watch on YouTube", key=f"youtube_{idx}_{i}"):
-                                webbrowser.open(video['url'])
-                    
-                    st.markdown("---")            
-            # Button untuk cari lebih banyak video
-            col_search1, col_search2 = st.columns(2)
-            with col_search1:
-                if st.button("🔍 Search More NASA Videos", key=f"more_videos_{idx}"):
-                    search_url = f"https://images.nasa.gov/search-results?q={video_query.replace(' ', '+')}"
+            with col1:
+                if "microgravity" in title_lower:
+                    if st.button("📹 Microgravity Research", key=f"mg1_{idx}", use_container_width=True):
+                        webbrowser.open("https://www.youtube.com/watch?v=abc123micro")
+                    if st.button("📹 Space Experiments", key=f"mg2_{idx}", use_container_width=True):
+                        webbrowser.open("https://www.youtube.com/watch?v=def456exp")
+                elif "radiation" in title_lower:
+                    if st.button("📹 Space Radiation", key=f"rad1_{idx}", use_container_width=True):
+                        webbrowser.open("https://www.youtube.com/watch?v=ghi789rad")
+                    if st.button("📹 Radiation Protection", key=f"rad2_{idx}", use_container_width=True):
+                        webbrowser.open("https://www.youtube.com/watch?v=jkl012protect")
+                elif "plant" in title_lower:
+                    if st.button("📹 Space Farming", key=f"plant1_{idx}", use_container_width=True):
+                        webbrowser.open("https://www.youtube.com/watch?v=mno345plant")
+                    if st.button("📹 Plant Research", key=f"plant2_{idx}", use_container_width=True):
+                        webbrowser.open("https://www.youtube.com/watch?v=pqr678grow")
+                else:
+                    if st.button("📹 NASA Research", key=f"nasa1_{idx}", use_container_width=True):
+                        webbrowser.open("https://www.youtube.com/watch?v=yzab567nasa")
+            
+            with col2:
+                if st.button("📹 Search More Videos", key=f"search_{idx}", use_container_width=True):
+                    search_url = f"https://www.youtube.com/results?search_query=NASA+{row['title'].replace(' ', '+')}"
                     webbrowser.open(search_url)
-            with col_search2:
-                if st.button("🔄 Refresh Videos", key=f"refresh_{idx}"):
-                    st.rerun()
+
             # Enhanced AI Summary Button
             if st.button(f"🤖 **Summarize Article**", key=f"summarize_{idx}"):
                 text_to_summarize = ""
@@ -1185,23 +1079,6 @@ st.sidebar.markdown("""
     <p style="color: #e0f7fa; text-align: center; font-size: 0.9em;">Explore connections between space research articles</p>
 </div>
 """, unsafe_allow_html=True)
-st.sidebar.markdown("---")
-st.sidebar.markdown("#### 🧪 Video Debugging")
-
-if st.sidebar.button("Test NASA Video API"):
-    test_videos = get_real_nasa_videos("microgravity", 2)
-    if test_videos:
-        st.sidebar.success(f"✅ API Working! Found {len(test_videos)} videos")
-        for i, video in enumerate(test_videos):
-            st.sidebar.write(f"Video {i+1}: {video['title']}")
-            st.sidebar.write(f"URL: {video['url']}")
-            st.sidebar.write(f"Type: {'MP4' if video['url'].endswith('.mp4') else 'Other'}")
-    else:
-        st.sidebar.error("❌ API Test Failed")
-
-# Toggle antara real vs simulated videos
-use_real_videos = st.sidebar.checkbox("Use Real NASA Videos", value=True, 
-                                     help="Toggle to use real NASA API or simulated data")
 # ✅ BUTTONS BARU - LETAK DI SINI, SELEPAS HEADER
 col1, col2 = st.sidebar.columns(2)
 

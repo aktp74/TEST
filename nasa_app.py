@@ -138,46 +138,74 @@ df = load_data()
 # 🤖 AI Summarizer
 # =========================
 def ai_summarize(text, max_tokens=400, mode="single"):
+    # STEP 1: Check if API key exists
     api_key = os.getenv("OPENROUTER_API_KEY")
+    
+    # Debug: Show API key status in sidebar
     if not api_key:
-        return "❌ API key OpenRouter tidak dijumpai. Sila set dulu."
+        st.sidebar.error("❌ OPENROUTER_API_KEY not found in environment")
+        return "❌ Error: OpenRouter API key not configured. Please set OPENROUTER_API_KEY environment variable."
+    else:
+        st.sidebar.success(f"✅ API Key found: {api_key[:8]}...")
 
+    # STEP 2: Setup API request
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://nasa-space-dashboard.streamlit.app",
+        "X-Title": "NASA Space Dashboard"
     }
 
+    # STEP 3: Prepare the text (limit length)
     if mode == "overview":
-        user_prompt = f"""
-Below is a collection of abstracts and conclusions from multiple NASA space bioscience articles.
-Your task: Write a comprehensive overview summary (5–10 paragraphs) in English.
-Focus on major themes, key findings, knowledge gaps, and overall research trends.
-Do not list each article one by one.
-
-Text:
-{text}
-"""
+        user_prompt = f"""Buat comprehensive summary dalam English untuk NASA space bioscience articles. 
+        Focus on major themes, key findings, dan research trends.
+        
+        Text: {text[:3000]}"""
     else:
-        user_prompt = f"Summarize this article in 5–7 sentences, in English:\n\n{text}"
+        user_prompt = f"""Summarize this NASA space research article in 5-7 sentences in English:
+        
+        {text[:2000]}"""
 
+    # STEP 4: Prepare data payload
     data = {
-        "model": "openrouter/auto",
+        "model": "meta-llama/llama-3-8b-instruct:free",  # Free model
         "messages": [
-            {"role": "system", "content": "You are an AI that summarizes scientific articles clearly in English."},
-            {"role": "user", "content": user_prompt}
+            {
+                "role": "system", 
+                "content": "You are a scientific research assistant that summarizes NASA space bioscience articles clearly in English."
+            },
+            {
+                "role": "user", 
+                "content": user_prompt
+            }
         ],
         "max_tokens": max_tokens,
     }
 
+    # STEP 5: Make API request
     try:
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()
-        result = response.json()
-        return result["choices"][0]["message"]["content"]
+        with st.spinner("🔄 Calling AI API... (10-30 seconds)"):
+            response = requests.post(url, headers=headers, json=data, timeout=60)
+        
+        # STEP 6: Handle response
+        if response.status_code == 200:
+            result = response.json()
+            return result["choices"][0]["message"]["content"]
+        elif response.status_code == 402:
+            return "❌ Payment required. Please check your OpenRouter credits."
+        elif response.status_code == 429:
+            return "❌ Rate limit exceeded. Please try again in a minute."
+        elif response.status_code == 401:
+            return "❌ Invalid API key. Please check your OpenRouter API key."
+        else:
+            return f"❌ API Error {response.status_code}: {response.text}"
+            
+    except requests.exceptions.Timeout:
+        return "❌ Request timeout. The API is taking too long to respond."
     except Exception as e:
-        return f"❌ Ralat AI: {e}"
-# =========================
+        return f"❌ Connection Error: {str(e)}"
 # 🆕 SMART SUMMARIZE FUNCTIONS - TAMBAH INI
 # =========================
 def smart_summarize(text, max_tokens=400, mode="single"):
@@ -664,27 +692,76 @@ with tabs[0]:
 
             # Enhanced AI Summary Button
             if st.button(f"🤖 **Summarize Article**", key=f"summarize_{idx}"):
-                text_to_summarize = ""
-                if "abstract" in row and pd.notna(row["abstract"]):
-                    text_to_summarize += f"Abstract:\n{row['abstract']}\n\n"
-                if "conclusion" in row and pd.notna(row["conclusion"]):
-                    text_to_summarize += f"Conclusion:\n{row['conclusion']}\n\n"
-                if text_to_summarize:
-                    summary = ai_summarize(text_to_summarize, mode="single")
-                    st.markdown(f"""
-                    <div style="
-                        background: rgba(0, 100, 150, 0.3);
-                        border-radius: 10px;
-                        padding: 15px;
-                        margin: 15px 0;
-                        border-left: 4px solid #00FFFF;
-                    ">
-                        <strong style="color: #00f5ff;">🤖 AI Summary:</strong><br>
-                        <span style="color: #e0f7fa;">{summary}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            st.markdown("---")
+    
+    # STEP 1: Collect text untuk summarization
+    text_to_summarize = ""
+    if "abstract" in row and pd.notna(row["abstract"]):
+        text_to_summarize += f"Abstract:\n{row['abstract']}\n\n"
+    if "conclusion" in row and pd.notna(row["conclusion"]):
+        text_to_summarize += f"Conclusion:\n{row['conclusion']}\n\n"
+    
+    # STEP 2: Check if ada text
+    if text_to_summarize.strip():
+        
+        # STEP 3: Show debug information
+        with st.expander("🔍 **Debug Information**", expanded=False):
+            st.write(f"📏 **Text Length:** {len(text_to_summarize)} characters")
+            st.write(f"📄 **First 300 chars:** {text_to_summarize[:300]}...")
+            st.write(f"🔑 **API Key Status:** {'✅ Found' if os.getenv('OPENROUTER_API_KEY') else '❌ Missing'}")
+        
+        # STEP 4: Call AI summarization
+        with st.spinner("🤖 Generating AI summary... This may take 10-30 seconds"):
+            summary = smart_summarize(text_to_summarize, mode="single")
+        
+        # STEP 5: Display results
+        if summary.startswith("❌"):
+            # Jika error
+            st.error(f"**❌ AI Summary Failed**")
+            st.write(f"**Error Details:** {summary}")
+            
+            with st.expander("🔧 **Troubleshooting Guide**", expanded=True):
+                st.markdown("""
+                **Possible Solutions:**
+                
+                1. **🔑 Check API Key** 
+                   - Go to [OpenRouter](https://openrouter.ai/)
+                   - Get FREE API key
+                   - Set as environment variable: `OPENROUTER_API_KEY=your_key_here`
+                
+                2. **💳 Check Credits**
+                   - Login to OpenRouter dashboard
+                   - Verify you have sufficient credits
+                
+                3. **🕐 Wait & Retry**
+                   - Free models might be busy
+                   - Try again in 1-2 minutes
+                
+                4. **📞 Contact Support**
+                   - Visit [OpenRouter Discord](https://discord.gg/openrouter)
+                """)
+                
+        else:
+            # Jika berjaya
+            st.success("✅ AI Summary Generated Successfully!")
+            st.markdown(f"""
+            <div style="
+                background: rgba(0, 100, 150, 0.3);
+                border-radius: 10px;
+                padding: 20px;
+                margin: 15px 0;
+                border-left: 4px solid #00FFFF;
+            ">
+                <h4 style="color: #00f5ff; margin-top: 0;">🤖 AI Summary</h4>
+                <div style="color: #e0f7fa; line-height: 1.6;">
+                    {summary}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+    else:
+        # Jika tiada text
+        st.warning("⚠️ No text available for summarization")
+        st.info("This article might be missing abstract and conclusion sections.")
 # Summarize All Button
         if len(results) > 1:
             if st.button("🧠 **Generate Comprehensive Summary**", use_container_width=True):
@@ -984,6 +1061,42 @@ st.sidebar.markdown("""
     <p style="color: #e0f7fa; text-align: center; font-size: 0.9em;">Explore connections between space research articles</p>
 </div>
 """, unsafe_allow_html=True)
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🔑 API Status Check")
+
+# Check API key status
+api_key_exists = os.getenv("OPENROUTER_API_KEY") is not None
+
+if api_key_exists:
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    st.sidebar.success("✅ OpenRouter API: CONFIGURED")
+    st.sidebar.info(f"Key: {api_key[:8]}...{api_key[-4:]}")
+else:
+    st.sidebar.error("❌ OpenRouter API: NOT CONFIGURED")
+    
+    with st.sidebar.expander("🚨 Setup Instructions", expanded=True):
+        st.markdown("""
+        **How to Fix 'Summarize Article':**
+        
+        1. **Get FREE API Key:**
+           - Visit [OpenRouter.ai](https://openrouter.ai/)
+           - Sign up (FREE)
+           - Go to Settings → API Keys
+           - Create new key
+        
+        2. **Set Environment Variable:**
+           ```bash
+           export OPENROUTER_API_KEY=your_key_here
+           ```
+        
+        3. **For Streamlit Cloud:**
+           - Go to app settings
+           - Add environment variable
+           - Name: `OPENROUTER_API_KEY`
+           - Value: `your_actual_key`
+        
+        4. **Restart app** dan cuba semula!
+        """)
 # ✅ BUTTONS BARU - LETAK DI SINI, SELEPAS HEADER
 col1, col2 = st.sidebar.columns(2)
 
@@ -1072,5 +1185,6 @@ else:
 # 🏁 END OF APP
 # =========================
 st.markdown('</div>', unsafe_allow_html=True)  # Tutup main-content div
+
 
 

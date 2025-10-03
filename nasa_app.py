@@ -135,12 +135,16 @@ def load_data():
 df = load_data()
 
 # =========================
-# 🤖 AI Summarizer
+# 🤖 AI Summarizer - IMPROVED VERSION
 # =========================
 def ai_summarize(text, max_tokens=400, mode="single"):
+    """Enhanced AI summarization with better error handling"""
     api_key = os.getenv("OPENROUTER_API_KEY")
+    
+    # Jika tidak ada API key, langsung gunakan fallback
     if not api_key:
-        return "❌ API key OpenRouter tidak dijumpai. Sila set dulu."
+        st.sidebar.warning("⚠️ OpenRouter API key not found. Using rule-based summary.")
+        return fallback_summarize(text, mode)
 
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
@@ -148,35 +152,126 @@ def ai_summarize(text, max_tokens=400, mode="single"):
         "Content-Type": "application/json",
     }
 
+    # Limit text length to avoid token limits
     if mode == "overview":
+        truncated_text = text[:6000]  # Limit untuk overview
         user_prompt = f"""
-Below is a collection of abstracts and conclusions from multiple NASA space bioscience articles.
-Your task: Write a comprehensive overview summary (5–10 paragraphs) in English.
-Focus on major themes, key findings, knowledge gaps, and overall research trends.
-Do not list each article one by one.
+Berdasarkan koleksi abstrak dan kesimpulan dari artikel-artikel NASA tentang space bioscience, 
+tuliskan ringkasan komprehensif dalam Bahasa Inggeris (5-10 paragraph). 
+Fokus pada tema utama, penemuan penting, knowledge gaps, dan trend penelitian terkini.
 
 Text:
-{text}
+{truncated_text}
 """
     else:
-        user_prompt = f"Summarize this article in 5–7 sentences, in English:\n\n{text}"
+        truncated_text = text[:3000]  # Limit untuk single article
+        user_prompt = f"""
+Ringkaskan artikel NASA ini dalam 5-7 ayat dalam Bahasa Inggeris. 
+Fokus pada objektif, metodologi, penemuan utama, dan implikasi:
+
+{truncated_text}
+"""
 
     data = {
         "model": "openrouter/auto",
         "messages": [
-            {"role": "system", "content": "You are an AI that summarizes scientific articles clearly in English."},
+            {"role": "system", "content": "You are a scientific research assistant that summarizes NASA space bioscience articles clearly and concisely in English."},
             {"role": "user", "content": user_prompt}
         ],
         "max_tokens": max_tokens,
     }
 
     try:
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=30)
         response.raise_for_status()
         result = response.json()
-        return result["choices"][0]["message"]["content"]
+        
+        if "choices" in result and len(result["choices"]) > 0:
+            return result["choices"][0]["message"]["content"]
+        else:
+            return fallback_summarize(text, mode)
+            
+    except requests.exceptions.Timeout:
+        return "⏰ Request timeout. Using fallback summary:\n\n" + fallback_summarize(text, mode)
+    except requests.exceptions.RequestException as e:
+        return f"🌐 Network error. Using fallback summary:\n\n{fallback_summarize(text, mode)}"
     except Exception as e:
-        return f"❌ Ralat AI: {e}"
+        return f"🤖 AI service unavailable. Using fallback:\n\n{fallback_summarize(text, mode)}"
+
+def fallback_summarize(text, mode="single"):
+    """Improved rule-based summarization as backup"""
+    # Clean the text
+    text = ' '.join(text.split())
+    sentences = [s.strip() for s in text.split('. ') if len(s.strip()) > 10]
+    
+    if len(sentences) <= 3:
+        return text
+    
+    if mode == "overview":
+        # Untuk overview, ambil representative sentences dari awal, tengah, dan akhir
+        if len(sentences) >= 10:
+            key_indices = [0, 1, len(sentences)//3, len(sentences)//2, 
+                          len(sentences)*2//3, -2, -1]
+        else:
+            key_indices = [0, len(sentences)//2, -1]
+        
+        key_sentences = [sentences[i] for i in key_indices if i < len(sentences)]
+        summary = ". ".join(key_sentences) + "."
+        
+        return f"📋 **Rule-based Overview Summary:**\n\n{summary}"
+    
+    else:
+        # Untuk single article, ambil 3-5 sentences yang paling informative
+        if len(sentences) <= 5:
+            summary = ". ".join(sentences) + "."
+        else:
+            # Prioritize sentences that contain key scientific terms
+            science_terms = ['study', 'research', 'results', 'found', 'conclusion', 
+                           'method', 'data', 'analysis', 'significant', 'effect']
+            
+            scored_sentences = []
+            for i, sentence in enumerate(sentences):
+                score = 0
+                # First few sentences usually important
+                if i < 2:
+                    score += 2
+                # Last few sentences usually important  
+                if i > len(sentences) - 3:
+                    score += 2
+                # Sentences with science terms
+                if any(term in sentence.lower() for term in science_terms):
+                    score += 1
+                # Medium length sentences often best
+                if 50 < len(sentence) < 200:
+                    score += 1
+                    
+                scored_sentences.append((score, sentence))
+            
+            # Take top 4-5 sentences
+            scored_sentences.sort(reverse=True)
+            top_sentences = [s[1] for s in scored_sentences[:4]]
+            summary = ". ".join(top_sentences) + "."
+        
+        return f"📄 **Rule-based Article Summary:**\n\n{summary}"
+
+def smart_summarize(text, max_tokens=400, mode="single"):
+    """Smart summarization dengan improved fallback"""
+    # Untuk demo, boleh toggle antara AI dan fallback
+    use_ai = st.sidebar.checkbox("🤖 Use AI Summarization", value=True, 
+                                help="Uncheck to use faster rule-based summaries")
+    
+    if use_ai:
+        with st.spinner("🔄 Generating AI summary..."):
+            ai_result = ai_summarize(text, max_tokens, mode)
+        
+        # Check if AI failed
+        if any(keyword in ai_result.lower() for keyword in ['error', 'unavailable', 'timeout', 'network', 'fallback']):
+            st.sidebar.warning("AI summarization failed. Using rule-based fallback.")
+            return fallback_summarize(text, mode)
+        
+        return ai_result
+    else:
+        return fallback_summarize(text, mode)
 # =========================
 # 🆕 SMART SUMMARIZE FUNCTIONS - TAMBAH INI
 # =========================
@@ -670,7 +765,7 @@ with tabs[0]:
                 if "conclusion" in row and pd.notna(row["conclusion"]):
                     text_to_summarize += f"Conclusion:\n{row['conclusion']}\n\n"
                 if text_to_summarize:
-                    summary = ai_summarize(text_to_summarize, mode="single")
+                    summary = smart_summarize(text_to_summarize, mode="single")
                     st.markdown(f"""
                     <div style="
                         background: rgba(0, 100, 150, 0.3);

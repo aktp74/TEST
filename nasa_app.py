@@ -20,68 +20,41 @@ if 'show_knowledge_graph' not in st.session_state:
 # 🎬 NASA VIDEO API FUNCTIONS - REAL API
 # =========================
 def search_nasa_videos(query, max_results=3):
-    """
-    Cari video dari NASA Image and Video Library API
-    """
+    """Cari video dari NASA Image and Video Library API berdasarkan query."""
+    url = f"https://images-api.nasa.gov/search?q={query}&media_type=video"
     try:
-        base_url = "https://images-api.nasa.gov/search"
-        params = {
-            "q": query,
-            "media_type": "video",
-            "year_start": "2010",  # Video dari 2010 ke atas
-        }
-        
-        response = requests.get(base_url, params=params, timeout=10)
-        
+        response = requests.get(url, timeout=10)
         if response.status_code == 200:
             data = response.json()
+            items = data.get("collection", {}).get("items", [])
             videos = []
-            
-            if "collection" in data and "items" in data["collection"]:
-                items = data["collection"]["items"][:max_results]
-                
-                for item in items:
-                    if "data" in item and len(item["data"]) > 0:
-                        video_data = item["data"][0]
-                        
-                        # Dapatkan video URL dari links
-                        video_url = None
-                        thumbnail_url = None
-                        
-                        if "links" in item:
-                            for link in item["links"]:
-                                if link.get("rel") == "preview":
-                                    thumbnail_url = link.get("href")
-                        
-                        # Dapatkan video file URL
-                        if "href" in item:
-                            # Fetch asset manifest untuk dapatkan video URL
-                            asset_response = requests.get(item["href"], timeout=5)
-                            if asset_response.status_code == 200:
-                                asset_url = asset_response.json()
-                                # Cari MP4 file
-                                if isinstance(asset_url, list):
-                                    for asset in asset_url:
-                                        if asset.endswith('.mp4'):
-                                            video_url = asset
-                                            break
-                        
-                        videos.append({
-                            "title": video_data.get("title", "Untitled"),
-                            "description": video_data.get("description", "No description available")[:200] + "...",
-                            "video_url": video_url,
-                            "thumbnail": thumbnail_url,
-                            "nasa_id": video_data.get("nasa_id", ""),
-                            "date_created": video_data.get("date_created", "Unknown")
-                        })
-            
-            return videos if videos else get_fallback_videos(query)
-        else:
-            return get_fallback_videos(query)
-            
+            for item in items[:max_results]:
+                nasa_id = item["data"][0].get("nasa_id", "")
+                title = item["data"][0].get("title", "No Title")
+                description = item["data"][0].get("description", "")
+                thumbnail = (
+                    item["links"][0]["href"] if "links" in item and item["links"] else ""
+                )
+
+                video_url = None
+                if "href" in item:
+                    asset_response = requests.get(item["href"], timeout=5)
+                    if asset_response.status_code == 200:
+                        # NASA manifest ialah text file, bukan JSON
+                        asset_list = asset_response.text.splitlines()
+                        video_url = next((a for a in asset_list if a.endswith(".mp4")), None)
+
+                videos.append({
+                    "nasa_id": nasa_id,
+                    "title": title,
+                    "description": description,
+                    "thumbnail": thumbnail,
+                    "video_url": video_url,
+                })
+            return videos
     except Exception as e:
-        st.sidebar.warning(f"⚠️ NASA API error: {str(e)}")
-        return get_fallback_videos(query)
+        print("NASA API error:", e)
+    return []
 
 def get_fallback_videos(query):
     """

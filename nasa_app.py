@@ -669,7 +669,7 @@ with tabs[0]:
                                 st.markdown(f"[🔗 Tonton di NASA.gov]({nasa_video_page})")
                                 st.info("💡 Video akan dibuka dalam tab baru di laman NASA")
             else:
-                st.info("🔍 Tiada video berkaitan dijumpai. Cuba cari dengan kata kunci lain.")
+                st.info("🔍 No related video")
             
             # AI Summary Button
             if st.button(f"🤖 **Summarize Article**", key=f"summarize_{idx}"):

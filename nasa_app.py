@@ -690,8 +690,8 @@ with tabs[0]:
                     search_url = f"https://www.youtube.com/results?search_query=NASA+{row['title'].replace(' ', '+')}"
                     webbrowser.open(search_url)
 
-            # Enhanced AI Summary Button
-            if st.button(f"🤖 **Summarize Article**", key=f"summarize_{idx}"):
+# Enhanced AI Summary Button - FIXED INDENTATION
+if st.button(f"🤖 **Summarize Article**", key=f"summarize_{idx}"):
     
     # STEP 1: Collect text untuk summarization
     text_to_summarize = ""
@@ -762,6 +762,8 @@ with tabs[0]:
         # Jika tiada text
         st.warning("⚠️ No text available for summarization")
         st.info("This article might be missing abstract and conclusion sections.")
+
+st.markdown("---")
 # Summarize All Button
         if len(results) > 1:
             if st.button("🧠 **Generate Comprehensive Summary**", use_container_width=True):
@@ -1185,6 +1187,3 @@ else:
 # 🏁 END OF APP
 # =========================
 st.markdown('</div>', unsafe_allow_html=True)  # Tutup main-content div
-
-
-

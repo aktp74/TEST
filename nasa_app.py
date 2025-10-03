@@ -100,29 +100,48 @@ if os.path.exists(img_file):
     st.markdown(page_bg, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================
-# 🎵 Background Music Setup
-# =========================
-music_file = "background.mp3"
-if os.path.exists(music_file):
-    with open(music_file, "rb") as f:
-        audio_bytes = f.read()
-    b64 = base64.b64encode(audio_bytes).decode()
+# 🎵 BACKGROUND MUSIC - STREAMLIT CLOUD COMPATIBLE
+def setup_background_music():
+    music_file = "background.mp3"
+    if os.path.exists(music_file):
+        with open(music_file, "rb") as f:
+            audio_bytes = f.read()
+        
+        # Display audio player dengan controls
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 🎵 Background Music")
+        
+        # Tampilkan audio player
+        st.sidebar.audio(audio_bytes, format="audio/mp3")
+        
+        # Auto-play script yang triggered oleh user interaction
+        autoplay_html = """
+        <script>
+        function playMusic() {
+            const audioElements = document.querySelectorAll('audio');
+            if (audioElements.length > 0) {
+                audioElements[0].volume = 0.3;
+                audioElements[0].play().catch(e => {
+                    console.log('Auto-play prevented, waiting for user interaction');
+                });
+            }
+        }
+        
+        // Try to play when page loads (might not work due to autoplay policies)
+        setTimeout(playMusic, 2000);
+        
+        // Play when user clicks anywhere
+        document.addEventListener('click', function() {
+            playMusic();
+        });
+        </script>
+        """
+        components.html(autoplay_html, height=0)
+    else:
+        st.sidebar.info("🎵 Add background.mp3 for background music")
 
-    md_audio = f"""
-    <audio id="bg-music" autoplay loop hidden>
-        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-        Your browser does not support the audio element.
-    </audio>
-    <script>
-        var audio = document.getElementById("bg-music");
-        audio.volume = 0.2;
-    </script>
-    """
-    st.markdown(md_audio, unsafe_allow_html=True)
-else:
-    st.sidebar.warning("⚠️ background.mp3 tidak dijumpai. Letak fail ini dalam folder sama dengan app.py")
-
+# Panggil function ini dalam main app selepas imports
+setup_background_music()
 # =========================
 # 📊 Data Loading
 # =========================

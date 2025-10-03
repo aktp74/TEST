@@ -190,24 +190,21 @@ if os.path.exists(music_file):
     b64 = base64.b64encode(audio_bytes).decode()
 
     md_audio = f"""
-    <script>
-    var audio = new Audio("data:audio/mp3;base64,{b64}");
-    audio.loop = true;
-    audio.autoplay = true;
-    audio.volume = 0.15;
-    audio.muted = true;  // autoplay dibenarkan kerana mute
+<audio id="bg-music" autoplay loop muted>
+    <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+</audio>
+<script>
+document.addEventListener('click', function() {{
+    var audio = document.getElementById('bg-music');
+    if (audio.muted) {{
+        audio.muted = false;
+        audio.volume = 0.2; // laras volume ikut keperluan
+        audio.play().catch(err => console.log("Play failed:", err));
+    }}
+}});
+</script>
+"""
 
-    // Unmute & play selepas user klik sekali
-    document.addEventListener('click', function() {{
-        if (audio.muted) {{
-            audio.muted = false;
-            audio.play().catch(function(err) {{
-                console.log("Play failed:", err);
-            }});
-        }}
-    }});
-    </script>
-    """
 
     st.markdown(md_audio, unsafe_allow_html=True)
 # =========================

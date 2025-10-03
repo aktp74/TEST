@@ -416,40 +416,44 @@ def get_simulated_osdr_videos(query, max_results=3):
         relevant_videos = video_database["default"]
     
     return relevant_videos[:max_results]
+@st.cache_data(ttl=3600)
 def get_real_nasa_videos(query, max_results=3):
     """
-    Cari video sebenar dari NASA Image and Video Library API
+    Cari video sebenar dari NASA Image and Video Library API - OPTIMIZED FOR STREAMLIT CLOUD
     """
     try:
         url = "https://images-api.nasa.gov/search"
         params = {
             "q": f"{query} space bioscience",
-            "media_type": "video",
+            "media_type": "video", 
             "page_size": max_results
         }
         
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params, timeout=15)
         response.raise_for_status()
         data = response.json()
         
         videos = []
         for item in data.get("collection", {}).get("items", []):
             nasa_id = item["data"][0]["nasa_id"]
+            title = item["data"][0]["title"]
             
-            # Dapatkan video URL yang betul
-            video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~orig.mp4"
+            # Gunakan mobile version yang lebih kecil untuk Streamlit Cloud
+            video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~mobile.mp4"
             
-            # Check jika video URL accessible
+            # Check jika video accessible (penting untuk Streamlit Cloud)
             try:
+                # Simple head request untuk verify video exists
                 head_response = requests.head(video_url, timeout=5)
                 if head_response.status_code != 200:
-                    video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~mobile.mp4"
+                    # Fallback ke orig version
+                    video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~orig.mp4"
             except:
-                video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~mobile.mp4"
+                video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~orig.mp4"
 
             video_info = {
-                "title": item["data"][0]["title"],
-                "description": item["data"][0].get("description", "No description available"),
+                "title": title,
+                "description": item["data"][0].get("description", "NASA official video"),
                 "url": video_url,
                 "thumbnail": f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~thumb.jpg",
                 "date": item["data"][0].get("date_created", ""),
@@ -458,12 +462,11 @@ def get_real_nasa_videos(query, max_results=3):
             }
             videos.append(video_info)
         
-        # Jika tak jumpa video, guna fallback
         return videos if videos else get_simulated_osdr_videos(query)
         
     except Exception as e:
-        st.sidebar.warning(f"⚠️ Could not fetch NASA videos: {e}")
-        return get_simulated_osdr_videos(query)  # Fallback ke simulasi
+        st.sidebar.warning(f"⚠️ NASA video API unavailable: {e}")
+        return get_simulated_osdr_videos(query)
 # =========================
 # 🌐 Graph Functions
 # =========================
@@ -799,54 +802,58 @@ with tabs[0]:
             if "conclusion" in row and pd.notna(row["conclusion"]):
                 with st.expander("📌 **Conclusion**", expanded=False):
                     st.write(row["conclusion"])
-            # 🎬 VIDEO SECTION - REAL NASA VIDEOS
+            # 🎬 VIDEO SECTION - OPTIMIZED FOR STREAMLIT CLOUD
             st.markdown("---")
             st.markdown("#### 🎬 **NASA Video Resources**")
             
             # Dapatkan video sebenar dari NASA
             video_query = extract_video_keywords(row['title'])
-            nasa_videos = search_nasa_osdr_videos(video_query, max_results=3)
+            nasa_videos = search_nasa_osdr_videos(video_query, max_results=2)  # Kurangkan untuk performance
             
             if not nasa_videos:
-                st.info("No NASA videos found for this topic. Try searching with different keywords.")
-            else:
-                # Display videos dalam layout yang lebih baik
-                for i, video in enumerate(nasa_videos):
-                    st.markdown(f"**Video {i+1}: {video['title']}**")
+                st.info("🔍 No NASA videos found. Using simulated data.")
+                # Fallback ke simulated videos
+                nasa_videos = get_simulated_osdr_videos(video_query, 2)
+            
+            for i, video in enumerate(nasa_videos):
+                with st.container():
+                    st.markdown(f"**{video['title']}**")
                     
                     col1, col2 = st.columns([1, 2])
                     
                     with col1:
-                        # Thumbnail - BETULKAN PARAMETER DI SINI
+                        # Thumbnail
                         try:
-                            st.image(video['thumbnail'], use_container_width=True)  # ✅ UBAH KE use_container_width
+                            st.image(video['thumbnail'], use_container_width=True)
                         except:
-                            st.image("https://via.placeholder.com/150x84/0d3b66/ffffff?text=NASA+Video", 
-                                    use_container_width=True)  # ✅ UBAH KE use_container_width
+                            st.image("https://images-assets.nasa.gov/image/iss067e328135/iss067e328135~thumb.jpg", 
+                                    use_container_width=True)
                     
                     with col2:
-                        st.write(f"**Date:** {video.get('date', 'Unknown')[:10]}")
+                        st.caption(f"📅 {video.get('date', '')[:10]}")
                         
-                        # Pamerkan video description
+                        # Description
                         desc = video.get('description', 'NASA official video')
-                        if len(desc) > 150:
-                            desc = desc[:150] + "..."
-                        st.write(desc)
+                        st.write(desc[:100] + "..." if len(desc) > 100 else desc)
                         
-                        # Video player - cuba mainkan video
-                        st.write("**Video Preview:**")
-                        try:
-                            st.video(video['url'])
-                        except Exception as e:
-                            st.warning(f"Could not play video: {e}")
-                            st.write(f"Video URL: {video['url']}")
-                            
-                            # Alternative: Download button
-                            if st.button(f"📥 Download Video {i+1}", key=f"download_{idx}_{i}"):
+                        # VIDEO PLAYER - Streamlit Cloud compatible
+                        st.write("**Video:**")
+                        
+                        # Check jika ini NASA MP4 video atau YouTube link
+                        if video['url'].endswith('.mp4') or 'nasa.gov' in video['url']:
+                            try:
+                                st.video(video['url'])
+                            except Exception as e:
+                                st.warning("Video cannot be played directly")
+                                if st.button(f"🌐 Open Video in Browser", key=f"open_{idx}_{i}"):
+                                    webbrowser.open(video['url'])
+                        else:
+                            # Untuk YouTube links, hanya provide link
+                            st.info("YouTube video - click below to watch:")
+                            if st.button(f"🎬 Watch on YouTube", key=f"youtube_{idx}_{i}"):
                                 webbrowser.open(video['url'])
                     
-                    st.markdown("---")
-            
+                    st.markdown("---")            
             # Button untuk cari lebih banyak video
             col_search1, col_search2 = st.columns(2)
             with col_search1:

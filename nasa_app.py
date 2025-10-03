@@ -204,9 +204,8 @@ document.addEventListener('click', function() {{
 }});
 </script>
 """
+st.markdown(md_audio, unsafe_allow_html=True)
 
-
-    st.markdown(md_audio, unsafe_allow_html=True)
 # =========================
 # 📊 Data Loading & AI Functions (SAMA SEPERTI ASAL)
 # =========================

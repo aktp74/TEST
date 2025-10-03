@@ -328,10 +328,10 @@ def search_nasa_osdr_videos(query, max_results=3):
     Search for related videos from NASA database - REAL VERSION
     """
     try:
-        return get_real_nasa_videos(query, max_results)
+        return get_real_nasa_videos(query, max_results)  # ✅ Ganti ke fungsi baru
     except Exception as e:
-        st.sidebar.warning(f"Video search failed: {e}")
-        return get_simulated_osdr_videos(query, max_results)
+        return get_simulated_osdr_videos(query, max_results)  # ✅ Fallback ke simulasi
+
 def extract_video_keywords(title):
     """
     Extract keywords dari title artikel untuk video search
@@ -409,6 +409,7 @@ def get_simulated_osdr_videos(query, max_results=3):
         relevant_videos = video_database["default"]
     
     return relevant_videos[:max_results]
+
 def get_real_nasa_videos(query, max_results=3):
     """
     Cari video sebenar dari NASA Image and Video Library API

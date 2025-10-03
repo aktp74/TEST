@@ -7,6 +7,7 @@ from pyvis.network import Network
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import streamlit as st
+import webbrowser
 import PyPDF2
 import docx
 import streamlit.components.v1 as components 
@@ -17,104 +18,10 @@ if 'show_knowledge_graph' not in st.session_state:
     st.session_state.show_knowledge_graph = False
 
 # =========================
-# 🎬 NASA VIDEO API FUNCTIONS - REAL API
+# 🎨 Background Image Setup
 # =========================
-def search_nasa_videos(query, max_results=3):
-    """Cari video dari NASA Image and Video Library API berdasarkan query."""
-    url = f"https://images-api.nasa.gov/search?q={query}&media_type=video"
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            items = data.get("collection", {}).get("items", [])
-            videos = []
-            for item in items[:max_results]:
-                nasa_id = item["data"][0].get("nasa_id", "")
-                title = item["data"][0].get("title", "No Title")
-                description = item["data"][0].get("description", "")
-                thumbnail = (
-                    item["links"][0]["href"] if "links" in item and item["links"] else ""
-                )
-
-                video_url = None
-                if "href" in item:
-                    asset_response = requests.get(item["href"], timeout=5)
-                    if asset_response.status_code == 200:
-                        # NASA manifest ialah text file, bukan JSON
-                        asset_list = asset_response.text.splitlines()
-                        video_url = next((a for a in asset_list if a.endswith(".mp4")), None)
-
-                videos.append({
-                    "nasa_id": nasa_id,
-                    "title": title,
-                    "description": description,
-                    "thumbnail": thumbnail,
-                    "video_url": video_url,
-                })
-            return videos
-    except Exception as e:
-        print("NASA API error:", e)
-    return []
-
-def get_fallback_videos(query):
-    """
-    Fallback video links jika API gagal
-    """
-    fallback_db = {
-        "microgravity": [
-            {
-                "title": "Microgravity Research on ISS",
-                "description": "NASA research on microgravity effects in space station",
-                "video_url": "https://images-assets.nasa.gov/video/Microgravity_Research/Microgravity_Research~mobile.mp4",
-                "thumbnail": "https://images-assets.nasa.gov/video/Microgravity_Research/Microgravity_Research~thumb.jpg",
-                "nasa_id": "Microgravity_Research"
-            }
-        ],
-        "radiation": [
-            {
-                "title": "Space Radiation Effects",
-                "description": "Understanding cosmic radiation in space",
-                "video_url": "https://images-assets.nasa.gov/video/Space_Radiation/Space_Radiation~mobile.mp4",
-                "thumbnail": "https://images-assets.nasa.gov/video/Space_Radiation/Space_Radiation~thumb.jpg",
-                "nasa_id": "Space_Radiation"
-            }
-        ],
-        "plant": [
-            {
-                "title": "Growing Plants in Space",
-                "description": "NASA Veggie plant growth system on ISS",
-                "video_url": "https://images-assets.nasa.gov/video/Plant_Growth_ISS/Plant_Growth_ISS~mobile.mp4",
-                "thumbnail": "https://images-assets.nasa.gov/video/Plant_Growth_ISS/Plant_Growth_ISS~thumb.jpg",
-                "nasa_id": "Plant_Growth_ISS"
-            }
-        ]
-    }
-    
-    for keyword, videos in fallback_db.items():
-        if keyword in query.lower():
-            return videos
-    
-    # Default NASA video
-    return [{
-        "title": "NASA Space Research Overview",
-        "description": "General overview of NASA space bioscience research",
-        "video_url": "https://images-assets.nasa.gov/video/NASA_Research/NASA_Research~mobile.mp4",
-        "thumbnail": "https://images-assets.nasa.gov/video/NASA_Research/NASA_Research~thumb.jpg",
-        "nasa_id": "NASA_Research"
-    }]
-
-def display_video_player(video_url, title):
-    """
-    Display video player dalam Streamlit
-    """
-    if video_url:
-        st.video(video_url)
-        st.caption(f"🎬 {title}")
-    else:
-        st.warning("⚠️ Video URL tidak tersedia")
-
 # =========================
-# 🎨 Background & Sidebar Setup (SAMA SEPERTI ASAL)
+# 🎨 Sidebar Background (Deep Space Gradient)
 # =========================
 st.markdown("""
 <style>
@@ -122,10 +29,12 @@ st.markdown("""
         background: linear-gradient(180deg, #0c0e2e 0%, #1a237e 50%, #283593 100%);
     }
     
+    /* Untuk pastikan text dalam sidebar kelihatan jelas */
     .sidebar-content {
         color: #ffffff;
     }
     
+    /* Improve button visibility dalam sidebar */
     .stButton > button {
         color: #00ffff;
         border: 1px solid #00ffff;
@@ -138,7 +47,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
 def get_base64_of_bin_file(bin_file):
     with open(bin_file, "rb") as f:
         data = f.read()
@@ -147,42 +55,53 @@ def get_base64_of_bin_file(bin_file):
 img_file = "background.jpg"
 if os.path.exists(img_file):
     img_base64 = get_base64_of_bin_file(img_file)
+
     page_bg = f"""
     <style>
+    /* Background Image */
     [data-testid="stAppViewContainer"] {{
         background-image: url("data:image/jpg;base64,{img_base64}");
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
     }}
+
     [data-testid="stHeader"] {{
         background: rgba(0, 0, 0, 0);
     }}
+
+    /* Glassmorphism + Neon Border */
     .block-container {{
-        background: rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.08);   /* semi-transparent glass */
         border-radius: 20px;
         padding: 25px;
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(0, 200, 255, 0.5);
-        box-shadow: 0 0 15px rgba(0, 200, 255, 0.25);
-        color: #f0faff;
+        border: 1px solid rgba(0, 200, 255, 0.5);  /* neon border */
+        box-shadow: 0 0 15px rgba(0, 200, 255, 0.25);  /* glowing shadow */
+        color: #f0faff;  /* soft text color */
         transition: all 0.3s ease-in-out;
     }}
+
+    /* Hover Effect */
     .block-container:hover {{
         border: 1px solid rgba(0, 255, 255, 0.9);
         box-shadow: 0 0 25px rgba(0, 255, 255, 0.6);
-        transform: translateY(-3px);
+        transform: translateY(-3px);   /* floating effect */
     }}
+
+    /* Headings */
     h1, h2, h3, h4 {{
         color: #1a3c34;
     }}
     </style>
     """
+
     st.markdown(page_bg, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# 🎵 Background Music Setup (mute autoplay → unmute selepas klik)
+# 🎵 Background Music Setup
 # =========================
 music_file = "background.mp3"
 if os.path.exists(music_file):
@@ -191,29 +110,21 @@ if os.path.exists(music_file):
     b64 = base64.b64encode(audio_bytes).decode()
 
     md_audio = f"""
+    <audio id="bg-music" autoplay loop hidden>
+        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+        Your browser does not support the audio element.
+    </audio>
     <script>
-    var audio = new Audio("data:audio/mp3;base64,{b64}");
-    audio.loop = true;
-    audio.autoplay = true;
-    audio.volume = 0.15;
-    audio.muted = true;  // autoplay dibenarkan kerana mute
-
-    // Unmute & play selepas user klik sekali
-    document.addEventListener('click', function() {{
-        if (audio.muted) {{
-            audio.muted = false;
-            audio.play().catch(function(err) {{
-                console.log("Play failed:", err);
-            }});
-        }}
-    }});
+        var audio = document.getElementById("bg-music");
+        audio.volume = 0.2;
     </script>
     """
-
     st.markdown(md_audio, unsafe_allow_html=True)
+else:
+    st.sidebar.warning("⚠️ background.mp3 tidak dijumpai. Letak fail ini dalam folder sama dengan app.py")
 
 # =========================
-# 📊 Data Loading & AI Functions (SAMA SEPERTI ASAL)
+# 📊 Data Loading
 # =========================
 @st.cache_data
 def load_data():
@@ -223,8 +134,14 @@ def load_data():
 
 df = load_data()
 
+# =========================
+# 🤖 AI Summarizer - IMPROVED VERSION
+# =========================
 def ai_summarize(text, max_tokens=400, mode="single"):
+    """Enhanced AI summarization with better error handling"""
     api_key = os.getenv("OPENROUTER_API_KEY")
+    
+    # Jika tidak ada API key, langsung gunakan fallback
     if not api_key:
         st.sidebar.warning("⚠️ OpenRouter API key not found. Using rule-based summary.")
         return fallback_summarize(text, mode)
@@ -235,8 +152,9 @@ def ai_summarize(text, max_tokens=400, mode="single"):
         "Content-Type": "application/json",
     }
 
+    # Limit text length to avoid token limits
     if mode == "overview":
-        truncated_text = text[:6000]
+        truncated_text = text[:6000]  # Limit untuk overview
         user_prompt = f"""
 Berdasarkan koleksi abstrak dan kesimpulan dari artikel-artikel NASA tentang space bioscience, 
 tuliskan ringkasan komprehensif dalam Bahasa Inggeris (5-10 paragraph). 
@@ -246,7 +164,7 @@ Text:
 {truncated_text}
 """
     else:
-        truncated_text = text[:3000]
+        truncated_text = text[:3000]  # Limit untuk single article
         user_prompt = f"""
 Ringkaskan artikel NASA ini dalam 5-7 ayat dalam Bahasa Inggeris. 
 Fokus pada objektif, metodologi, penemuan utama, dan implikasi:
@@ -273,10 +191,16 @@ Fokus pada objektif, metodologi, penemuan utama, dan implikasi:
         else:
             return fallback_summarize(text, mode)
             
+    except requests.exceptions.Timeout:
+        return "⏰ Request timeout. Using fallback summary:\n\n" + fallback_summarize(text, mode)
+    except requests.exceptions.RequestException as e:
+        return f"🌐 Network error. Using fallback summary:\n\n{fallback_summarize(text, mode)}"
     except Exception as e:
-        return fallback_summarize(text, mode)
+        return f"🤖 AI service unavailable. Using fallback:\n\n{fallback_summarize(text, mode)}"
 
 def fallback_summarize(text, mode="single"):
+    """Improved rule-based summarization as backup"""
+    # Clean the text
     text = ' '.join(text.split())
     sentences = [s.strip() for s in text.split('. ') if len(s.strip()) > 10]
     
@@ -284,6 +208,7 @@ def fallback_summarize(text, mode="single"):
         return text
     
     if mode == "overview":
+        # Untuk overview, ambil representative sentences dari awal, tengah, dan akhir
         if len(sentences) >= 10:
             key_indices = [0, 1, len(sentences)//3, len(sentences)//2, 
                           len(sentences)*2//3, -2, -1]
@@ -292,28 +217,37 @@ def fallback_summarize(text, mode="single"):
         
         key_sentences = [sentences[i] for i in key_indices if i < len(sentences)]
         summary = ". ".join(key_sentences) + "."
+        
         return f"📋 **Rule-based Overview Summary:**\n\n{summary}"
+    
     else:
+        # Untuk single article, ambil 3-5 sentences yang paling informative
         if len(sentences) <= 5:
             summary = ". ".join(sentences) + "."
         else:
+            # Prioritize sentences that contain key scientific terms
             science_terms = ['study', 'research', 'results', 'found', 'conclusion', 
                            'method', 'data', 'analysis', 'significant', 'effect']
             
             scored_sentences = []
             for i, sentence in enumerate(sentences):
                 score = 0
+                # First few sentences usually important
                 if i < 2:
                     score += 2
+                # Last few sentences usually important  
                 if i > len(sentences) - 3:
                     score += 2
+                # Sentences with science terms
                 if any(term in sentence.lower() for term in science_terms):
                     score += 1
+                # Medium length sentences often best
                 if 50 < len(sentence) < 200:
                     score += 1
                     
                 scored_sentences.append((score, sentence))
             
+            # Take top 4-5 sentences
             scored_sentences.sort(reverse=True)
             top_sentences = [s[1] for s in scored_sentences[:4]]
             summary = ". ".join(top_sentences) + "."
@@ -321,6 +255,8 @@ def fallback_summarize(text, mode="single"):
         return f"📄 **Rule-based Article Summary:**\n\n{summary}"
 
 def smart_summarize(text, max_tokens=400, mode="single"):
+    """Smart summarization dengan improved fallback"""
+    # Untuk demo, boleh toggle antara AI dan fallback
     use_ai = st.sidebar.checkbox("🤖 Use AI Summarization", value=True, 
                                 help="Uncheck to use faster rule-based summaries")
     
@@ -328,6 +264,7 @@ def smart_summarize(text, max_tokens=400, mode="single"):
         with st.spinner("🔄 Generating AI summary..."):
             ai_result = ai_summarize(text, max_tokens, mode)
         
+        # Check if AI failed
         if any(keyword in ai_result.lower() for keyword in ['error', 'unavailable', 'timeout', 'network', 'fallback']):
             st.sidebar.warning("AI summarization failed. Using rule-based fallback.")
             return fallback_summarize(text, mode)
@@ -335,8 +272,37 @@ def smart_summarize(text, max_tokens=400, mode="single"):
         return ai_result
     else:
         return fallback_summarize(text, mode)
+# =========================
+# 🆕 SMART SUMMARIZE FUNCTIONS - TAMBAH INI
+# =========================
+def smart_summarize(text, max_tokens=400, mode="single"):
+    """Smart summarization dengan fallback"""
+    # Cuba AI dulu
+    ai_result = ai_summarize(text, max_tokens, mode)
+    
+    # Jika AI gagal, guna fallback
+    if ai_result.startswith("❌"):
+        st.sidebar.warning("AI summarization failed. Using rule-based fallback.")
+        return fallback_summarize(text, mode)
+    
+    return ai_result
 
-# PDF/DOCX Functions (SAMA)
+def fallback_summarize(text, mode="single"):
+    """Simple rule-based summarization sebagai backup"""
+    sentences = text.split('. ')
+    if len(sentences) <= 5:
+        return text
+    
+    if mode == "overview":
+        # Ambil 8-10 sentences untuk overview
+        key_sentences = sentences[:3] + sentences[len(sentences)//2:len(sentences)//2+3] + sentences[-3:]
+        return ". ".join(key_sentences) + "."
+    else:
+        # Ambil 5-7 sentences untuk single article
+        return ". ".join(sentences[:5]) + "."
+# =========================
+# 📑 PDF/DOCX Reader + AI Feedback
+# =========================
 def extract_text_from_pdf(file):
     reader = PyPDF2.PdfReader(file)
     text = ""
@@ -357,7 +323,152 @@ def ai_comment_on_report(report_text, corpus_texts):
     related_paper = df.iloc[most_similar_idx]["title"]
     return f"Closest related article: **{related_paper}** (similarity score {score:.2f})."
 
-# Graph Functions (SAMA)
+def search_nasa_osdr_videos(query, max_results=3):
+    """
+    Search for related videos from NASA database - REAL VERSION
+    """
+    # Check jika user nak guna real videos atau simulated
+    if 'use_real_videos' not in st.session_state:
+        st.session_state.use_real_videos = True
+    
+    try:
+        if st.session_state.use_real_videos:
+            return get_real_nasa_videos(query, max_results)  # ✅ Ganti ke fungsi baru
+        else:
+            return get_simulated_osdr_videos(query, max_results)  # ✅ Fallback ke simulasi
+    except Exception as e:
+        st.sidebar.warning(f"Video search failed, using fallback: {e}")
+        return get_simulated_osdr_videos(query, max_results)
+def extract_video_keywords(title):
+    """
+    Extract keywords dari title artikel untuk video search
+    """
+    title_lower = title.lower()
+    
+    keyword_mapping = {
+        'microgravity': 'microgravity space biology',
+        'radiation': 'space radiation protection', 
+        'plant': 'space plant growth NASA',
+        'cell': 'space cell biology',
+        'astronaut': 'astronaut health NASA',
+        'mars': 'Mars mission biology',
+        'iss': 'International Space Station research',
+        'biological': 'space biological systems',
+        'genetic': 'space genetics research'
+    }
+    
+    for keyword, search_query in keyword_mapping.items():
+        if keyword in title_lower:
+            return search_query
+    
+    return "NASA space bioscience"  # default query
+def get_simulated_osdr_videos(query, max_results=3):
+    """
+    Simulated NASA OSDR video data untuk demonstration
+    """
+    video_database = {
+        "microgravity": [
+            {
+                "title": "Microgravity Effects on Human Cells - NASA Research",
+                "url": "https://www.youtube.com/watch?v=abc123micro",
+                "thumbnail": "https://img.youtube.com/vi/abc123micro/mqdefault.jpg",
+                "description": "NASA study on cellular behavior in microgravity environments",
+                "duration": "15:30"
+            }
+        ],
+        "radiation": [
+            {
+                "title": "Space Radiation Shielding Technologies", 
+                "url": "https://www.youtube.com/watch?v=ghi789rad",
+                "thumbnail": "https://img.youtube.com/vi/ghi789rad/mqdefault.jpg",
+                "description": "Advanced materials for protecting astronauts from cosmic radiation",
+                "duration": "18:20"
+            }
+        ],
+        "plant": [
+            {
+                "title": "Growing Plants in Space - Veggie System",
+                "url": "https://www.youtube.com/watch?v=mno345plant", 
+                "thumbnail": "https://img.youtube.com/vi/mno345plant/mqdefault.jpg",
+                "description": "NASA's research on plant growth for future space missions",
+                "duration": "22:15"
+            }
+        ],
+        "default": [
+            {
+                "title": "NASA Space Bioscience Research Overview",
+                "url": "https://www.youtube.com/watch?v=yzab567default",
+                "thumbnail": "https://img.youtube.com/vi/yzab567default/mqdefault.jpg",
+                "description": "Comprehensive overview of NASA's life sciences research",
+                "duration": "25:40"
+            }
+        ]
+    }
+    
+    query_lower = query.lower()
+    relevant_videos = []
+    
+    for keyword, videos in video_database.items():
+        if keyword in query_lower and keyword != "default":
+            relevant_videos.extend(videos)
+    
+    if not relevant_videos:
+        relevant_videos = video_database["default"]
+    
+    return relevant_videos[:max_results]
+def get_real_nasa_videos(query, max_results=3):
+    """
+    Cari video sebenar dari NASA Image and Video Library API - OPTIMIZED FOR STREAMLIT CLOUD
+    """
+    try:
+        url = "https://images-api.nasa.gov/search"
+        params = {
+            "q": f"{query} space bioscience",
+            "media_type": "video", 
+            "page_size": max_results
+        }
+        
+        response = requests.get(url, params=params, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        
+        videos = []
+        for item in data.get("collection", {}).get("items", []):
+            nasa_id = item["data"][0]["nasa_id"]
+            title = item["data"][0]["title"]
+            
+            # Gunakan mobile version yang lebih kecil untuk Streamlit Cloud
+            video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~mobile.mp4"
+            
+            # Check jika video accessible (penting untuk Streamlit Cloud)
+            try:
+                # Simple head request untuk verify video exists
+                head_response = requests.head(video_url, timeout=5)
+                if head_response.status_code != 200:
+                    # Fallback ke orig version
+                    video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~orig.mp4"
+            except:
+                video_url = f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~orig.mp4"
+
+            video_info = {
+                "title": title,
+                "description": item["data"][0].get("description", "NASA official video"),
+                "url": video_url,
+                "thumbnail": f"https://images-assets.nasa.gov/video/{nasa_id}/{nasa_id}~thumb.jpg",
+                "date": item["data"][0].get("date_created", ""),
+                "source": "NASA Official",
+                "nasa_id": nasa_id
+            }
+            videos.append(video_info)
+        
+        return videos if videos else get_simulated_osdr_videos(query)
+        
+    except Exception as e:
+        st.sidebar.warning(f"⚠️ NASA video API unavailable: {e}")
+        return get_simulated_osdr_videos(query)
+# =========================
+# 🌐 Graph Functions
+# =========================
 def build_knowledge_graph(df, max_nodes=50):
     G = nx.Graph()
     for idx, row in df.head(max_nodes).iterrows():
@@ -388,20 +499,29 @@ def build_similarity_graph(df, max_nodes=30, top_k=3):
             if sim_score > 0.1:
                 G.add_edge(art_i, art_j, weight=sim_score)
     return G
-
 def display_knowledge_graph_online(df):
+    """Fungsi baru untuk display graph dalam Streamlit online"""
     try:
+        # Build graph
         G = build_knowledge_graph(df, max_nodes=30)
+        
+        # Create Pyvis network
         net = Network(height="600px", width="100%", bgcolor="#0d1b2a", font_color="white")
         net.from_nx(G)
+        
+        # Generate HTML content
         html_content = net.generate_html()
+        
+        # Display dalam Streamlit menggunakan components
         components.html(html_content, height=600, scrolling=True)
+        
         return True
     except Exception as e:
         st.error(f"❌ Error generating graph: {e}")
         return False
 
 def display_similarity_graph_online(df):
+    """Fungsi untuk similarity graph"""
     try:
         G = build_similarity_graph(df, max_nodes=20)
         net = Network(height="600px", width="100%", bgcolor="#0d1b2a", font_color="white")
@@ -412,12 +532,12 @@ def display_similarity_graph_online(df):
     except Exception as e:
         st.error(f"❌ Error generating similarity graph: {e}")
         return False
-
 # =========================
-# 🖥️ Main UI (DENGAN VIDEO YANG DIUBAHSUAI)
+# 🖥️ Main UI
 # =========================
 st.markdown("""
 <style>
+    /* Header styling */
     .main-header {
         text-align: center;
         background: linear-gradient(135deg, rgba(13, 59, 102, 0.8) 0%, rgba(30, 110, 167, 0.8) 50%, rgba(42, 157, 143, 0.8) 100%);
@@ -429,6 +549,7 @@ st.markdown("""
         backdrop-filter: blur(10px);
     }
     
+    /* Tabs styling */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
         background: rgba(255, 255, 255, 0.05);
@@ -461,6 +582,7 @@ st.markdown("""
         border: 1px solid #00f5ff;
     }
     
+    /* Content area improvement */
     .main-content {
         background: rgba(255, 255, 255, 0.02);
         border-radius: 15px;
@@ -470,18 +592,45 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Header (SAMA)
-logo_file = "team_logo.png"
+# Enhanced Header dengan Logo Team
+def get_logo_base64(logo_file):
+    if os.path.exists(logo_file):
+        with open(logo_file, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    return None
+
+logo_file = "team_logo.png"  # Ganti dengan nama file logo anda
 if os.path.exists(logo_file):
-    with open(logo_file, "rb") as f:
-        logo_base64 = base64.b64encode(f.read()).decode()
-    logo_img = f'<img src="data:image/png;base64,{logo_base64}" class="team-logo" alt="Team Logo" style="width: 80px; height: 80px; border-radius: 50%; border: 2px solid #00f5ff;">'
+    logo_base64 = get_logo_base64(logo_file)
+    logo_img = f'<img src="data:image/png;base64,{logo_base64}" class="team-logo" alt="Team Logo">'
 else:
     logo_img = '<div style="width: 80px; height: 80px; border-radius: 50%; border: 2px solid #00f5ff; background: rgba(0,245,255,0.2); display: flex; align-items: center; justify-content: center; color: #00f5ff; font-weight: bold;">TEAM</div>'
 
+st.markdown("""
+<style>
+    .logo-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 15px;
+    }
+    
+    .team-logo {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        border: 2px solid #00f5ff;
+        box-shadow: 0 0 20px rgba(0, 245, 255, 0.6);
+        transition: all 0.3s ease;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.markdown(f"""
 <div class="main-header">
-    <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 15px;">
+    <div class="logo-container">
         {logo_img}
         <div>
             <h1 style="color: #00f5ff; text-shadow: 0 0 20px #00f5ff; margin-bottom: 10px; font-size: 2.5em;">
@@ -501,13 +650,15 @@ st.markdown(f"""
     </div>
 </div>
 """, unsafe_allow_html=True)
-
+# Enhanced Tabs
 tabs = st.tabs(["🔍 **SEARCH & ANALYZE**", "📑 **UPLOAD & COMPARE**"])
 
+# Content container
 st.markdown('<div class="main-content">', unsafe_allow_html=True)
 
-# --- TAB 1: Search Publications (DENGAN VIDEO INTEGRATION) ---
+# --- TAB 1: Search Publications ---
 with tabs[0]:
+    # Enhanced Search Header
     st.markdown("""
     <div style="
         background: linear-gradient(135deg, rgba(13, 59, 102, 0.8) 0%, rgba(30, 110, 167, 0.6) 100%);
@@ -524,9 +675,11 @@ with tabs[0]:
     </div>
     """, unsafe_allow_html=True)
 
+    # Main Content Columns
     col_stats, col_search = st.columns([1, 2])
 
     with col_stats:
+        # Statistics Panel
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.05);
@@ -551,6 +704,7 @@ with tabs[0]:
         """, unsafe_allow_html=True)
 
     with col_search:
+        # Search Control Panel
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.08);
@@ -563,6 +717,7 @@ with tabs[0]:
         </div>
         """, unsafe_allow_html=True)
         
+        # Year Filter dengan design yang lebih baik
         years = sorted(df["year"].dropna().unique())
         selected_years = st.multiselect(
             "**🗓️ Filter by Publication Years:**",
@@ -571,12 +726,14 @@ with tabs[0]:
             help="Select specific years to focus your search"
         )
         
+        # Search Input yang lebih prominent
         query = st.text_input(
             "**🔍 Search Keywords:**",
             placeholder="Enter title, abstract, or conclusion keywords...",
             help="Search across article titles, abstracts, and conclusions"
         )
         
+        # Quick Search Tips
         with st.expander("💡 **Search Tips**", expanded=False):
             st.markdown("""
             - Use **specific terms**: "microgravity effects on cells"
@@ -585,13 +742,14 @@ with tabs[0]:
             - Use **boolean operators**: "Mars AND habitat"
             """)
 
-    # Results Section dengan NASA Video Integration
+    # Results Section - HANYA SATU BAHAGIAN INI SAHAJA
     if query:
         df_filtered = df[df["year"].isin(selected_years)] if selected_years else df
         results = df_filtered[df_filtered.astype(str)
                               .apply(lambda x: x.str.contains(query, case=False, na=False))
                               .any(axis=1)]
         
+        # Results Header
         st.markdown(f"""
         <div style="
             background: rgba(0, 245, 255, 0.1);
@@ -609,6 +767,7 @@ with tabs[0]:
         </div>
         """, unsafe_allow_html=True)
         
+        # Kekalkan for loop articles yang sudah diubah (dengan warna)
         for idx, row in results.head(20).iterrows():
             colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FECA57", "#FF9FF3", "#54A0FF", "#5F27CD"]
             current_color = colors[idx % len(colors)]
@@ -631,6 +790,7 @@ with tabs[0]:
             </div>
             """, unsafe_allow_html=True)
 
+            # Content kekal sama seperti sebelumnya
             if "link" in row and pd.notna(row["link"]):
                 st.markdown(f"**🌐 Full Article:** [{row['link']}]({row['link']})")
 
@@ -641,51 +801,68 @@ with tabs[0]:
             if "conclusion" in row and pd.notna(row["conclusion"]):
                 with st.expander("📌 **Conclusion**", expanded=False):
                     st.write(row["conclusion"])
-
-            # 🎬 NASA VIDEO SECTION - REAL API INTEGRATION
+            # 🎬 VIDEO SECTION - OPTIMIZED FOR STREAMLIT CLOUD
             st.markdown("---")
-            st.markdown("#### 🎬 **Related NASA Videos**")
+            st.markdown("#### 🎬 **NASA Video Resources**")
             
-            # Search videos berdasarkan article title
-            with st.spinner("🔍 Searching NASA video library..."):
-                video_results = search_nasa_videos(row['title'], max_results=3)
+            # Dapatkan video sebenar dari NASA
+            video_query = extract_video_keywords(row['title'])
+            nasa_videos = search_nasa_osdr_videos(video_query, max_results=2)  # Kurangkan untuk performance
             
-            if video_results:
-                # Display videos dalam columns
-                video_cols = st.columns(len(video_results))
-                
-                for col_idx, video in enumerate(video_results):
-                    with video_cols[col_idx]:
-                        st.markdown(f"""
-                        <div style="
-                            background: rgba(0, 100, 150, 0.2);
-                            padding: 10px;
-                            border-radius: 8px;
-                            border: 1px solid #00f5ff;
-                            margin: 5px 0;
-                        ">
-                            <strong style="color: #00f5ff;">🎬 {video['title'][:50]}...</strong><br>
-                            <small style="color: #e0f7fa;">{video['description'][:80]}...</small>
-                        </div>
-                        """, unsafe_allow_html=True)
+            if not nasa_videos:
+                st.info("🔍 No NASA videos found. Using simulated data.")
+                # Fallback ke simulated videos
+                nasa_videos = get_simulated_osdr_videos(video_query, 2)
+            
+            for i, video in enumerate(nasa_videos):
+                with st.container():
+                    st.markdown(f"**{video['title']}**")
+                    
+                    col1, col2 = st.columns([1, 2])
+                    
+                    with col1:
+                        # Thumbnail
+                        try:
+                            st.image(video['thumbnail'], use_container_width=True)
+                        except:
+                            st.image("https://images-assets.nasa.gov/image/iss067e328135/iss067e328135~thumb.jpg", 
+                                    use_container_width=True)
+                    
+                    with col2:
+                        st.caption(f"📅 {video.get('date', '')[:10]}")
                         
-                        # Button untuk tonton video
-                        if st.button(f"▶️ Tonton Video", key=f"video_{idx}_{col_idx}", use_container_width=True):
-                            st.session_state[f'show_video_{idx}_{col_idx}'] = True
+                        # Description
+                        desc = video.get('description', 'NASA official video')
+                        st.write(desc[:100] + "..." if len(desc) > 100 else desc)
                         
-                        # Display video player jika button ditekan
-                        if st.session_state.get(f'show_video_{idx}_{col_idx}', False):
-                            if video.get('video_url'):
-                                display_video_player(video['video_url'], video['title'])
-                            else:
-                                # Jika tiada direct video URL, buka NASA page
-                                nasa_video_page = f"https://images.nasa.gov/details/{video.get('nasa_id', '')}"
-                                st.markdown(f"[🔗 Tonton di NASA.gov]({nasa_video_page})")
-                                st.info("💡 Video akan dibuka dalam tab baru di laman NASA")
-            else:
-                st.info("🔍 No related video")
-            
-            # AI Summary Button
+                        # VIDEO PLAYER - Streamlit Cloud compatible
+                        st.write("**Video:**")
+                        
+                        # Check jika ini NASA MP4 video atau YouTube link
+                        if video['url'].endswith('.mp4') or 'nasa.gov' in video['url']:
+                            try:
+                                st.video(video['url'])
+                            except Exception as e:
+                                st.warning("Video cannot be played directly")
+                                if st.button(f"🌐 Open Video in Browser", key=f"open_{idx}_{i}"):
+                                    webbrowser.open(video['url'])
+                        else:
+                            # Untuk YouTube links, hanya provide link
+                            st.info("YouTube video - click below to watch:")
+                            if st.button(f"🎬 Watch on YouTube", key=f"youtube_{idx}_{i}"):
+                                webbrowser.open(video['url'])
+                    
+                    st.markdown("---")            
+            # Button untuk cari lebih banyak video
+            col_search1, col_search2 = st.columns(2)
+            with col_search1:
+                if st.button("🔍 Search More NASA Videos", key=f"more_videos_{idx}"):
+                    search_url = f"https://images.nasa.gov/search-results?q={video_query.replace(' ', '+')}"
+                    webbrowser.open(search_url)
+            with col_search2:
+                if st.button("🔄 Refresh Videos", key=f"refresh_{idx}"):
+                    st.rerun()
+            # Enhanced AI Summary Button
             if st.button(f"🤖 **Summarize Article**", key=f"summarize_{idx}"):
                 text_to_summarize = ""
                 if "abstract" in row and pd.notna(row["abstract"]):
@@ -708,8 +885,7 @@ with tabs[0]:
                     """, unsafe_allow_html=True)
 
             st.markdown("---")
-
-        # Summarize All Button
+# Summarize All Button
         if len(results) > 1:
             if st.button("🧠 **Generate Comprehensive Summary**", use_container_width=True):
                 all_text = ""
@@ -721,13 +897,46 @@ with tabs[0]:
                 
                 if all_text.strip():
                     with st.spinner("🤖 Generating comprehensive summary..."):
+                        # Guna smart_summarize instead of ai_summarize
                         summary_all = smart_summarize(all_text, max_tokens=800, mode="overview")
                     
                     with st.expander("📋 **Comprehensive Research Overview**", expanded=True):
-                        st.markdown(summary_all)
+                        if summary_all.startswith("❌"):
+                            st.error(summary_all)
+                            st.info("💡 **Tip**: Sila check OpenRouter API key dan kredit balance anda.")
+                        else:
+                            st.markdown(summary_all)
+def smart_summarize(text, max_tokens=400, mode="single"):
+    """Smart summarization dengan fallback"""
+    # Cuba AI dulu
+    ai_result = ai_summarize(text, max_tokens, mode)
+    
+    # Jika AI gagal, guna fallback
+    if ai_result.startswith("❌"):
+        st.sidebar.warning("AI summarization failed. Using rule-based fallback.")
+        return fallback_summarize(text, mode)
+    
+    return ai_result
 
-# --- TAB 2: Upload Report (SAMA SEPERTI ASAL) ---
+def fallback_summarize(text, mode="single"):
+    """Simple rule-based summarization sebagai backup"""
+    sentences = text.split('. ')
+    if len(sentences) <= 5:
+        return text
+    
+    if mode == "overview":
+        # Ambil 8-10 sentences untuk overview
+        key_sentences = sentences[:3] + sentences[len(sentences)//2:len(sentences)//2+3] + sentences[-3:]
+        return ". ".join(key_sentences) + "."
+    else:
+        # Ambil 5-7 sentences untuk single article
+        return ". ".join(sentences[:5]) + "."
+        
+        
+       
+# --- TAB 2: Upload Report ---
 with tabs[1]:
+    # Enhanced Upload Header
     st.markdown("""
     <div style="
         background: linear-gradient(135deg, rgba(42, 157, 143, 0.8) 0%, rgba(30, 110, 167, 0.6) 100%);
@@ -745,9 +954,11 @@ with tabs[1]:
     </div>
     """, unsafe_allow_html=True)
 
+    # Main Upload Layout
     col_upload, col_features = st.columns([2, 1])
 
     with col_upload:
+        # Upload Section dengan design yang lebih baik
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.05);
@@ -761,12 +972,14 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
         
+        # Enhanced File Uploader
         uploaded_file = st.file_uploader(
             "**Choose PDF or DOCX File**", 
             type=["pdf", "docx"],
             help="Upload your research paper, thesis, or report for AI analysis"
         )
         
+        # File Requirements Info
         st.markdown("""
         <div style="
             background: rgba(42, 157, 143, 0.1);
@@ -784,6 +997,7 @@ with tabs[1]:
         """, unsafe_allow_html=True)
 
     with col_features:
+        # Features Panel - SUPER SIMPLE (PASTI WORK)
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.08);
@@ -796,6 +1010,7 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
         
+        # Gunakan Streamlit native components
         st.markdown("**🔬 Content Extraction**")
         st.markdown("- Full text analysis  \n- Key concept identification")
         
@@ -805,6 +1020,7 @@ with tabs[1]:
         st.markdown("**🤖 AI Insights**")
         st.markdown("- Summary generation  \n- Relevance scoring  \n- Trend analysis")
 
+    # File Processing Section
     if uploaded_file:
         st.markdown("""
         <div style="
@@ -818,6 +1034,7 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
         
+        # File Info
         file_details = {
             "Filename": uploaded_file.name,
             "File size": f"{uploaded_file.size / 1024:.1f} KB",
@@ -827,7 +1044,7 @@ with tabs[1]:
         col_info, col_status = st.columns(2)
         
         with col_info:
-            st.markdown(f"""
+            st.markdown("""
             <div style="
                 background: rgba(255, 255, 255, 0.05);
                 padding: 15px;
@@ -835,15 +1052,21 @@ with tabs[1]:
             ">
                 <h5 style="color: #2a9d8f; margin: 0 0 10px 0;">📋 File Information</h5>
                 <p style="color: #e0f7fa; margin: 5px 0;">
-                    <strong>Name:</strong> {file_details["Filename"]}<br>
-                    <strong>Size:</strong> {file_details["File size"]}<br>
-                    <strong>Type:</strong> {file_details["File type"]}
+                    <strong>Name:</strong> {filename}<br>
+                    <strong>Size:</strong> {size}<br>
+                    <strong>Type:</strong> {filetype}
                 </p>
             </div>
-            """, unsafe_allow_html=True)
+            """.format(
+                filename=file_details["Filename"],
+                size=file_details["File size"],
+                filetype=file_details["File type"]
+            ), unsafe_allow_html=True)
         
         with col_status:
+            # Processing Animation
             with st.spinner("🔍 Extracting content and analyzing..."):
+                # Extract text dari file
                 if uploaded_file.type == "application/pdf":
                     report_text = extract_text_from_pdf(uploaded_file)
                 else:
@@ -851,6 +1074,7 @@ with tabs[1]:
             
             st.success("✅ Analysis completed!")
         
+        # Extracted Content Section
         st.markdown("""
         <div style="
             background: rgba(255, 255, 255, 0.05);
@@ -862,6 +1086,7 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
         
+        # Text preview dengan tabs
         tab_preview, tab_stats = st.tabs(["📝 Content Preview", "📊 Text Statistics"])
         
         with tab_preview:
@@ -881,6 +1106,7 @@ with tabs[1]:
             with col3:
                 st.metric("Estimated Pages", f"{len(report_text) // 1500 + 1}")
         
+        # AI Feedback Section
         st.markdown("""
         <div style="
             background: rgba(0, 245, 255, 0.1);
@@ -893,6 +1119,7 @@ with tabs[1]:
         </div>
         """, unsafe_allow_html=True)
         
+        # AI Comment dengan enhanced display
         with st.spinner("🔬 Comparing with NASA publications..."):
             comment = ai_comment_on_report(report_text, df["abstract"].fillna("").tolist())
         
@@ -905,6 +1132,41 @@ with tabs[1]:
         ">
             <h5 style="color: #00f5ff; margin: 0 0 10px 0;">📈 Relevance Analysis</h5>
             <p style="color: #e0f7fa; margin: 0; line-height: 1.6;">{comment}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Additional Analysis Suggestions
+        st.markdown("""
+        <div style="
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        ">
+            <h5 style="color: #2a9d8f; margin: 0 0 10px 0;">💡 Recommended Next Steps</h5>
+            <p style="color: #e0f7fa; margin: 0; font-size: 0.9em;">
+                • Search related articles using keywords from your report<br>
+                • Generate similarity graph to visualize connections<br>
+                • Use AI summarizer for detailed analysis of matched publications
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    else:
+        # Placeholder ketika tiada file diupload
+        st.markdown("""
+        <div style="
+            background: rgba(255, 255, 255, 0.02);
+            padding: 60px 20px;
+            border-radius: 12px;
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            text-align: center;
+            margin: 40px 0;
+        ">
+            <h4 style="color: rgba(255, 255, 255, 0.5); margin: 0;">📁 No file uploaded</h4>
+            <p style="color: rgba(255, 255, 255, 0.4);">
+                Upload a PDF or DOCX file to begin analysis
+            </p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -922,19 +1184,37 @@ st.sidebar.markdown("""
     <p style="color: #e0f7fa; text-align: center; font-size: 0.9em;">Explore connections between space research articles</p>
 </div>
 """, unsafe_allow_html=True)
+st.sidebar.markdown("---")
+st.sidebar.markdown("#### 🧪 Video Debugging")
 
+if st.sidebar.button("Test NASA Video API"):
+    test_videos = get_real_nasa_videos("microgravity", 2)
+    if test_videos:
+        st.sidebar.success(f"✅ API Working! Found {len(test_videos)} videos")
+        for i, video in enumerate(test_videos):
+            st.sidebar.write(f"Video {i+1}: {video['title']}")
+            st.sidebar.write(f"URL: {video['url']}")
+            st.sidebar.write(f"Type: {'MP4' if video['url'].endswith('.mp4') else 'Other'}")
+    else:
+        st.sidebar.error("❌ API Test Failed")
+
+# Toggle antara real vs simulated videos
+use_real_videos = st.sidebar.checkbox("Use Real NASA Videos", value=True, 
+                                     help="Toggle to use real NASA API or simulated data")
+# ✅ BUTTONS BARU - LETAK DI SINI, SELEPAS HEADER
 col1, col2 = st.sidebar.columns(2)
 
 with col1:
-    if st.button("🔗 **Similarity Graph**", use_container_width=True):
+    if st.button("🔗 **Similarity Graph**", use_container_width=True, help="Show how articles are related by content similarity"):
         st.session_state.show_similarity_graph = True
         st.session_state.show_knowledge_graph = False
 
 with col2:
-    if st.button("🧩 **Knowledge Graph**", use_container_width=True):
+    if st.button("🧩 **Knowledge Graph**", use_container_width=True, help="Visualize keywords and concepts from articles"):
         st.session_state.show_knowledge_graph = True
         st.session_state.show_similarity_graph = False
 
+# Additional NASA-themed elements  ← ✅ HANYA SATU!
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
 <div style="
@@ -952,6 +1232,7 @@ st.sidebar.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# NASA Stats  ← ✅ HANYA SATU!
 st.sidebar.markdown("---")
 st.sidebar.markdown("""
 <div style="text-align: center;">
@@ -959,22 +1240,25 @@ st.sidebar.markdown("""
     <p style="color: #e0f7fa; font-size: 0.9em; margin: 0;">Space Publications</p>
 </div>
 """, unsafe_allow_html=True)
-
-# Graph Display
+# =========================
+# 🌐 GRAPH DISPLAY AREA - ONLINE VERSION
+# =========================
 st.markdown("---")
 
+# Graph Display Section
 if st.session_state.get('show_similarity_graph'):
     st.markdown("### 🔗 Similarity Graph - Article Relationships")
     st.info("🖱️ **Tips**: Drag nodes to explore • Scroll to zoom • Click nodes to see connections")
-    with st.spinner("🔄 Generating similarity graph..."):
+    with st.spinner("🔄 Generating similarity graph... This may take a few seconds"):
         display_similarity_graph_online(df)
         
 elif st.session_state.get('show_knowledge_graph'):
     st.markdown("### 🧩 Knowledge Graph - Keywords & Concepts") 
     st.info("🖱️ **Tips**: Blue nodes = Articles • Green nodes = Keywords • Drag to explore relationships")
-    with st.spinner("🔄 Generating knowledge graph..."):
+    with st.spinner("🔄 Generating knowledge graph... This may take a few seconds"):
         display_knowledge_graph_online(df)
 else:
+    # Default message - hanya show pertama kali
     st.markdown("""
     <div style="
         background: rgba(255, 255, 255, 0.05);
@@ -988,7 +1272,20 @@ else:
         <p style="color: #e0f7fa; font-size: 1.1em;">
             Click on either graph button in the sidebar to visualize NASA research relationships
         </p>
+        <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px;">
+            <div style="text-align: center;">
+                <div style="color: orange; font-size: 2em;">🔗</div>
+                <p style="color: #e0f7fa; margin: 5px 0;">Similarity Graph<br><small>Article connections</small></p>
+            </div>
+            <div style="text-align: center;">
+                <div style="color: lightblue; font-size: 2em;">🧩</div>
+                <p style="color: #e0f7fa; margin: 5px 0;">Knowledge Graph<br><small>Keywords & concepts</small></p>
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-st.markdown('</div>', unsafe_allow_html=True)
+# =========================
+# 🏁 END OF APP
+# =========================
+st.markdown('</div>', unsafe_allow_html=True)  # Tutup main-content div

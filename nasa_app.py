@@ -181,7 +181,7 @@ if os.path.exists(img_file):
     """
     st.markdown(page_bg, unsafe_allow_html=True)
 # =========================
-# 🎵 Background Music Setup (mute autoplay → unmute selepas klik)
+# 🎵 Background Music - Auto-play setelah click page
 # =========================
 music_file = "background.mp3"
 if os.path.exists(music_file):
@@ -190,22 +190,63 @@ if os.path.exists(music_file):
     b64 = base64.b64encode(audio_bytes).decode()
 
     md_audio = f"""
-<audio id="bg-music" autoplay loop muted>
-    <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-</audio>
-<script>
-document.addEventListener('click', function() {{
-    var audio = document.getElementById('bg-music');
-    if (audio.muted) {{
-        audio.muted = false;
-        audio.volume = 0.2; // laras volume ikut keperluan
-        audio.play().catch(err => console.log("Play failed:", err));
-    }}
-}});
-</script>
-"""
-st.markdown(md_audio, unsafe_allow_html=True)
-
+    <audio id="bgMusic" loop style="display: none">
+        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+    </audio>
+    <script>
+        let musicPlayed = false;
+        
+        document.addEventListener('click', function() {{
+            if (!musicPlayed) {{
+                const audio = document.getElementById('bgMusic');
+                audio.volume = 0.3;
+                audio.play()
+                    .then(() => {{
+                        musicPlayed = true;
+                        console.log('Music started successfully');
+                    }})
+                    .catch(error => {{
+                        console.log('Music play failed:', error);
+                        // Create fallback button
+                        createMusicButton();
+                    }});
+            }}
+        }});
+        
+        function createMusicButton() {{
+            if (!document.getElementById('musicBtn')) {{
+                const btn = document.createElement('button');
+                btn.id = 'musicBtn';
+                btn.innerHTML = '🎵 Click to Play Music';
+                btn.style.position = 'fixed';
+                btn.style.bottom = '10px';
+                btn.style.right = '10px';
+                btn.style.zIndex = '9999';
+                btn.style.padding = '10px';
+                btn.style.background = '#00f5ff';
+                btn.style.color = 'black';
+                btn.style.border = 'none';
+                btn.style.borderRadius = '5px';
+                btn.style.cursor = 'pointer';
+                
+                btn.onclick = function() {{
+                    const audio = document.getElementById('bgMusic');
+                    audio.play();
+                    document.body.removeChild(btn);
+                }};
+                
+                document.body.appendChild(btn);
+            }}
+        }}
+        
+        // Try auto-play after 2 seconds
+        setTimeout(() => {{
+            const audio = document.getElementById('bgMusic');
+            audio.play().catch(e => console.log('Auto-play failed, waiting for user click'));
+        }}, 2000);
+    </script>
+    """
+    components.html(md_audio, height=0)
 # =========================
 # 📊 Data Loading & AI Functions (SAMA SEPERTI ASAL)
 # =========================
